@@ -25,11 +25,17 @@ Fixture适用期明确限定为`2026-01-02T00:00:00Z`至`2026-01-03T00:00:00Z`�
 ```bash
 python -m pip install -e ".[dev]"
 qcb-run-fixture --source binance --output output/demo \
-  --code-version 6df91eca238542c9c9d3013f733e7dc7b94f19dc
+  --run-id crypto-basis-demo
 ```
 
 命令只消费离线fixture并写本地`standard/v2`目录。输出中的订单、成交、费用、funding、现金、
-margin、持仓和NAV均来自QExec账本事实。
+margin、持仓和NAV均来自QExec账本事实。`code_version`总是从当前`quant-crypto-basis`仓库的
+clean HEAD解析；工作树dirty时拒绝写出。可选`--code-version <完整SHA>`仅作为预期值，若与
+当前HEAD不符同样拒绝写出。
+
+每次run都会读取并核验Binance与OKX两源fixture。manifest的`dataset_snapshots`记录
+catalog/index及两源fixture的SHA-256，`metrics`保留双源行数、事件类型和共同instrument质量，
+`lineage`区分所选执行源与双源QA来源。
 
 ## 质量门禁
 

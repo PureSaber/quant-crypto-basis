@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -42,3 +43,38 @@ def load_messages(root: Path, provider: str) -> list[dict]:
 @pytest.fixture
 def fixture_loader(fixture_root: Path) -> FixtureLoader:
     return FixtureLoader(fixture_root)
+
+
+@pytest.fixture
+def clean_git_repo(tmp_path: Path) -> tuple[Path, str]:
+    root = tmp_path / "clean-repository"
+    root.mkdir()
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "quant-crypto-basis"\nversion = "0.0.0"\n',
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "pyproject.toml"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.name=Quant Crypto Test",
+            "-c",
+            "user.email=quant-crypto@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "test fixture",
+        ],
+        check=True,
+    )
+    head = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+    ).stdout.strip()
+    return root, head

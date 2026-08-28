@@ -3,14 +3,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from quant_data_kit.exceptions import ValidationError
 from quant_lab import load_and_validate_standard_run
 
 from quant_crypto_basis.cli import main
 
-CODE_VERSION = "6df91eca238542c9c9d3013f733e7dc7b94f19dc"
 
-
-def test_cli_runs_only_local_fixture_and_writes_valid_standard_v2(tmp_path: Path, capsys) -> None:
+def test_cli_resolves_clean_head_and_writes_valid_standard_v2(
+    tmp_path: Path,
+    capsys,
+    monkeypatch,
+    clean_git_repo: tuple[Path, str],
+) -> None:
+    repository, head = clean_git_repo
+    monkeypatch.chdir(repository)
     output = tmp_path / "cli-run"
     assert (
         main(
@@ -19,8 +26,6 @@ def test_cli_runs_only_local_fixture_and_writes_valid_standard_v2(tmp_path: Path
                 "binance",
                 "--output",
                 str(output),
-                "--code-version",
-                CODE_VERSION,
                 "--run-id",
                 "cli-golden",
                 "--seed",
@@ -32,9 +37,30 @@ def test_cli_runs_only_local_fixture_and_writes_valid_standard_v2(tmp_path: Path
     )
     payload = json.loads(capsys.readouterr().out)
     assert payload["profile"] == "backtest-ledger"
+    assert payload["code_version"] == head
     assert payload["fill_count"] == 2
     assert Path(payload["standard_v2"]) == output / "standard" / "v2"
-    assert load_and_validate_standard_run(output).run_id == "cli-golden"
+    manifest = load_and_validate_standard_run(output)
+    assert manifest.run_id == "cli-golden"
+    assert manifest.code_version == head
+
+
+@pytest.mark.parametrize("code_version", [None, "0" * 40])
+def test_cli_rejects_dirty_or_mismatched_head(
+    tmp_path: Path,
+    monkeypatch,
+    clean_git_repo: tuple[Path, str],
+    code_version: str | None,
+) -> None:
+    repository, _ = clean_git_repo
+    monkeypatch.chdir(repository)
+    arguments = ["--output", str(tmp_path / "rejected")]
+    if code_version is None:
+        (repository / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+    else:
+        arguments.extend(["--code-version", code_version])
+    with pytest.raises(ValidationError, match="clean Git worktree|does not match"):
+        main(arguments)
 
 
 def test_source_tree_has_no_network_live_broker_or_credential_path() -> None:

@@ -18,7 +18,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--source", choices=("binance", "okx"), default="binance")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--code-version", required=True)
+    parser.add_argument(
+        "--code-version",
+        help="Optional expected full commit; always verified against the current clean HEAD",
+    )
     parser.add_argument("--run-id", default="crypto-basis-fixture-v1")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument(
@@ -49,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
                 "run_id": manifest.run_id,
                 "profile": manifest.profile,
                 "source": args.source,
+                "code_version": manifest.code_version,
                 "event_count": run.result.event_count,
                 "order_count": run.result.order_count,
                 "fill_count": run.result.fill_count,
