@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "certification_scope": "desensitized-offline-fixture-only",
+  "applicability": {
+    "effective_from": "2026-01-02T00:00:00Z",
+    "effective_to": "2026-01-03T00:00:00Z",
+    "historical_listing_claim": false
+  },
+  "files": {
+    "binance": "binance/events.json",
+    "okx": "okx/events.json"
+  },
+  "sha256": {
+    "binance/events.json": "deeb9f4e009094af744186dc8de7eb09d170f011fa47e511db176f43597816b7",
+    "okx/events.json": "95a727e1f37ada4bad2e006fc1046c502bbfef7139fe0c89125a64625c5fe8a8"
+  },
+  "provider_integrity": {
+    "binance": "U/u/pu continuity; Binance fixture has no books checksum field; file SHA-256 required",
+    "okx": "signed CRC32 books checksum and file SHA-256 required"
+  }
+}
