@@ -76,7 +76,8 @@ def test_every_normalized_channel_has_non_null_strictly_increasing_sequences(
     channels: dict[tuple[str, str], list[int]] = defaultdict(list)
     for event in batch.events:
         assert isinstance(event.sequence, int)
-        channels[(event.instrument_id, event.event_type)].append(event.sequence)
+        stream = "book" if event.event_type in {"book_snapshot", "book_delta"} else event.event_type
+        channels[(event.instrument_id, stream)].append(event.sequence)
     assert all(values == sorted(values) for values in channels.values())
     assert all(len(values) == len(set(values)) for values in channels.values())
 
