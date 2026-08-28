@@ -61,6 +61,8 @@ class CrossSourceQualityReport:
     common_instruments: frozenset[str]
     event_types: Mapping[str, frozenset[str]]
     row_counts: Mapping[str, int]
+    catalog_sha256: str
+    fixture_sha256: Mapping[str, str]
     price_equality_required: bool = False
 
 
@@ -305,12 +307,17 @@ def load_certified_fixtures(
     }
     if missing:
         raise ValidationError(f"cross-source adapter event coverage is incomplete: {missing}")
+    catalog_path = selected._safe_file("index.json")
     report = CrossSourceQualityReport(
         providers=("binance", "okx"),
         common_instruments=frozenset(common),
         event_types=MappingProxyType(event_types),
         row_counts=MappingProxyType(
             {provider: len(batch.records) for provider, batch in batches.items()}
+        ),
+        catalog_sha256=hashlib.sha256(catalog_path.read_bytes()).hexdigest(),
+        fixture_sha256=MappingProxyType(
+            {provider: batch.file_sha256 for provider, batch in batches.items()}
         ),
     )
     return batches, report

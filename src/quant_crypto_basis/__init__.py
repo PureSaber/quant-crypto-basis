@@ -16,6 +16,7 @@ from quant_crypto_basis.fixtures import (
     FixtureLoader,
     load_certified_fixtures,
 )
+from quant_crypto_basis.provenance import resolve_clean_head
 from quant_crypto_basis.runner import CertifiedBacktest, EventStageSnapshot, run_fixture_backtest
 from quant_crypto_basis.strategy import BasisFundingConfig, BasisFundingStrategy
 
@@ -38,6 +39,7 @@ __all__ = [
     "__version__",
     "default_instrument_master",
     "load_certified_fixtures",
+    "resolve_clean_head",
     "run_fixture_backtest",
     "write_certified_standard_run",
 ]

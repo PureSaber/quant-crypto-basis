@@ -16,12 +16,18 @@ from quant_lab import RunManifestV2, load_and_validate_standard_run, write_stand
 from quant_lab.contracts_v2 import ARTIFACT_SCHEMAS_V2, BACKTEST_LEDGER_PROFILE
 
 from quant_crypto_basis.catalog import INSTRUMENT_MASTER_VERSION
+from quant_crypto_basis.provenance import resolve_clean_head
 from quant_crypto_basis.runner import ACCOUNT_ID, STRATEGY_ID, CertifiedBacktest
 
 INTERNAL_DEPENDENCIES = {
     "quant-data-kit": "v0.5.0",
     "quant-execution": "v0.2.0",
     "quant-lab": "v0.3.0",
+}
+CATALOG_DATASET = "crypto-fixture-catalog-index"
+FIXTURE_DATASETS = {
+    "binance": "binance-offline-fixture",
+    "okx": "okx-offline-fixture",
 }
 
 
@@ -394,14 +400,30 @@ def write_certified_standard_run(
     run: CertifiedBacktest,
     run_dir: Path,
     *,
-    code_version: str,
+    code_version: str | None = None,
     created_at: datetime | str | None = None,
 ) -> RunManifestV2:
+    resolved_code_version = resolve_clean_head(expected_code_version=code_version)
     frames = build_standard_frames(run)
     created = created_at or run.snapshot.event_time
     created_text = created.isoformat() if isinstance(created, datetime) else created
     source = run.batch.provider
-    dataset_name = f"{source}-offline-fixture"
+    expected_providers = set(FIXTURE_DATASETS)
+    quality = run.quality_report
+    if (
+        set(quality.providers) != expected_providers
+        or set(quality.fixture_sha256) != expected_providers
+    ):
+        raise ValidationError("certified artifact requires complete Binance and OKX QA provenance")
+    if quality.fixture_sha256[source] != run.batch.file_sha256:
+        raise ValidationError("selected fixture hash differs from cross-source QA provenance")
+    dataset_snapshots = {
+        CATALOG_DATASET: f"sha256:{quality.catalog_sha256}",
+        **{
+            FIXTURE_DATASETS[provider]: f"sha256:{quality.fixture_sha256[provider]}"
+            for provider in quality.providers
+        },
+    }
     metrics = {
         "event_count": run.result.event_count,
         "order_count": run.result.order_count,
@@ -409,6 +431,14 @@ def write_certified_standard_run(
         "final_nav": str(_decimal(run.snapshot.nav)),
         "liquidation_required": run.snapshot.liquidation_required,
         "ledger_sha256": run.result.ledger_sha256,
+        "qa_provider_count": len(quality.providers),
+        "qa_common_instrument_count": len(quality.common_instruments),
+        "qa_binance_event_type_count": len(quality.event_types["binance"]),
+        "qa_okx_event_type_count": len(quality.event_types["okx"]),
+        "qa_binance_row_count": quality.row_counts["binance"],
+        "qa_okx_row_count": quality.row_counts["okx"],
+        "qa_price_equality_required": quality.price_equality_required,
+        "qa_dual_source_complete": True,
     }
     config = {
         "source": source,
@@ -423,10 +453,12 @@ def write_certified_standard_run(
         "passive_limits": run.strategy_config.passive_limits,
         "certification_scope": "research-backtest-paper-only",
     }
-    artifact_names = {"config", "metrics", *frames}
-    lineage = {
-        name: ([] if name == "config" else [f"dataset:{dataset_name}"]) for name in artifact_names
-    }
+    catalog_lineage = f"dataset:{CATALOG_DATASET}"
+    selected_lineage = f"dataset:{FIXTURE_DATASETS[source]}"
+    qa_lineage = [catalog_lineage, *(f"dataset:{FIXTURE_DATASETS[p]}" for p in quality.providers)]
+    lineage = {name: [catalog_lineage, selected_lineage] for name in frames}
+    lineage["config"] = [catalog_lineage]
+    lineage["metrics"] = qa_lineage
     manifest = write_standard_run_v2(
         Path(run_dir),
         project="quant-crypto-basis",
@@ -436,10 +468,10 @@ def write_certified_standard_run(
         frames=frames,
         metrics=metrics,
         config=config,
-        code_version=code_version,
+        code_version=resolved_code_version,
         internal_dependencies=INTERNAL_DEPENDENCIES,
         random_seed=run.result.seed,
-        dataset_snapshots={dataset_name: f"sha256:{run.batch.file_sha256}"},
+        dataset_snapshots=dataset_snapshots,
         instrument_master_version=INSTRUMENT_MASTER_VERSION,
         execution_model_version="quant-execution-v0.2.0:TradeBBOModel+ExactAccountLedger",
         base_currency=run.snapshot.base_currency,

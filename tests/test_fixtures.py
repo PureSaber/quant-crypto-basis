@@ -20,6 +20,7 @@ from quant_data_kit.exceptions import ValidationError
 
 from quant_crypto_basis.catalog import FIXTURE_EFFECTIVE_FROM
 from quant_crypto_basis.fixtures import FixtureLoader, load_certified_fixtures
+from quant_crypto_basis.runner import run_fixture_backtest
 
 
 def test_dual_source_fixture_quality_is_complete_without_price_equality() -> None:
@@ -28,6 +29,13 @@ def test_dual_source_fixture_quality_is_complete_without_price_equality() -> Non
     assert report.providers == ("binance", "okx")
     assert report.price_equality_required is False
     assert report.row_counts == {"binance": 17, "okx": 17}
+    assert report.fixture_sha256 == {
+        provider: batch.file_sha256 for provider, batch in batches.items()
+    }
+    assert (
+        report.catalog_sha256
+        == hashlib.sha256((FixtureLoader().root / "index.json").read_bytes()).hexdigest()
+    )
     assert len(report.common_instruments) == 4
     assert all(len(types) == 6 for types in report.event_types.values())
     expected_event_types = (
@@ -105,6 +113,17 @@ def test_okx_checksum_and_file_hash_fail_closed(fixture_root: Path) -> None:
     event_path.write_text(event_path.read_text(encoding="utf-8") + " ", encoding="utf-8")
     with pytest.raises(ValidationError, match="SHA-256 mismatch"):
         FixtureLoader(fixture_root).load("okx")
+
+
+def test_binance_run_rejects_tampered_nonselected_okx_fixture(fixture_root: Path) -> None:
+    okx_path = fixture_root / "okx" / "events.json"
+    okx_path.write_text(okx_path.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    with pytest.raises(ValidationError, match="SHA-256 mismatch"):
+        run_fixture_backtest(
+            source="binance",
+            run_id="tampered-cross-source",
+            fixture_loader=FixtureLoader(fixture_root),
+        )
 
 
 def test_fixture_directory_and_manifest_ambiguity_fail_closed(fixture_root: Path) -> None:
