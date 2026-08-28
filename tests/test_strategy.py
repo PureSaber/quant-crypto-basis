@@ -27,6 +27,7 @@ def _base(event_id: str, instrument_id: str, seconds: int) -> dict:
         "source": "binance",
         "trading_day": event_time.date(),
         "session_id": f"binance-24x7-{instrument_id}",
+        "sequence": seconds,
     }
 
 

@@ -1,4 +1,4 @@
-"""Offline Binance/OKX fixture loading through frozen QDK v0.5.0 adapters."""
+"""Offline Binance/OKX fixture loading through frozen QDK v0.6.0 adapters."""
 
 from __future__ import annotations
 

@@ -40,6 +40,9 @@ def test_standard_v2_backtest_ledger_is_complete_and_read_back(
     assert manifest.profile == BACKTEST_LEDGER_PROFILE
     assert manifest.internal_dependencies == INTERNAL_DEPENDENCIES
     assert manifest.code_version == head
+    assert manifest.time_range["start"] == "2026-01-02T00:00:01.001000+00:00"
+    assert manifest.time_range["end"] == "2026-01-02T00:00:09.501000+00:00"
+    assert "1970-01-01" not in json.dumps(manifest.time_range)
     required = {record.name for record in manifest.artifacts if record.required}
     assert required == {"config", "metrics", *PROFILE_ARTIFACTS_V2[BACKTEST_LEDGER_PROFILE]}
     row_counts = {record.name: record.rows for record in manifest.artifacts}
@@ -69,6 +72,9 @@ def test_standard_v2_backtest_ledger_is_complete_and_read_back(
     assert metrics["qa_binance_row_count"] == metrics["qa_okx_row_count"] == 17
     assert metrics["qa_binance_event_type_count"] == metrics["qa_okx_event_type_count"] == 6
     assert metrics["qa_price_equality_required"] is False
+    assert "l2-btc-spot-fixture-certified" in manifest.capabilities
+    assert "l2-not-certified-for-eth-or-perpetual" in manifest.capabilities
+    assert manifest.tags["l2_scope"] == "BTC spot fixture-certified only"
 
 
 def test_standard_frames_carry_qexec_funding_fees_marks_cash_and_margin() -> None:
@@ -99,23 +105,25 @@ def test_standard_v2_artifact_hashes_are_deterministic_and_directory_is_immutabl
 ) -> None:
     repository, head = clean_git_repo
     monkeypatch.chdir(repository)
-    run = run_fixture_backtest(source="binance", run_id="deterministic-artifacts", seed=11)
-    first = write_certified_standard_run(
-        run,
-        tmp_path / "first",
-        code_version=head,
-    )
-    second = write_certified_standard_run(
-        run,
-        tmp_path / "second",
-        code_version=head,
-    )
-    first_hashes = {record.name: record.sha256 for record in first.artifacts}
-    second_hashes = {record.name: record.sha256 for record in second.artifacts}
-    assert first_hashes == second_hashes
+    runs = [
+        run_fixture_backtest(source="binance", run_id="deterministic-artifacts", seed=11)
+        for _ in range(3)
+    ]
+    manifests = [
+        write_certified_standard_run(run, tmp_path / name, code_version=head)
+        for run, name in zip(runs, ("first", "second", "third"), strict=True)
+    ]
+    run_hashes = [
+        (run.result.event_sha256, run.result.fill_sha256, run.result.ledger_sha256) for run in runs
+    ]
+    assert run_hashes[0] == run_hashes[1] == run_hashes[2]
+    artifact_hashes = [
+        {record.name: record.sha256 for record in manifest.artifacts} for manifest in manifests
+    ]
+    assert artifact_hashes[0] == artifact_hashes[1] == artifact_hashes[2]
     with pytest.raises(FileExistsError, match="immutable"):
         write_certified_standard_run(
-            run,
+            runs[0],
             tmp_path / "first",
             code_version=head,
         )

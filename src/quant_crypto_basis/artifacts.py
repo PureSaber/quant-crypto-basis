@@ -20,8 +20,8 @@ from quant_crypto_basis.provenance import resolve_clean_head
 from quant_crypto_basis.runner import ACCOUNT_ID, STRATEGY_ID, CertifiedBacktest
 
 INTERNAL_DEPENDENCIES = {
-    "quant-data-kit": "v0.5.0",
-    "quant-execution": "v0.2.0",
+    "quant-data-kit": "v0.6.0",
+    "quant-execution": "v0.3.0",
     "quant-lab": "v0.3.0",
 }
 CATALOG_DATASET = "crypto-fixture-catalog-index"
@@ -473,7 +473,7 @@ def write_certified_standard_run(
         random_seed=run.result.seed,
         dataset_snapshots=dataset_snapshots,
         instrument_master_version=INSTRUMENT_MASTER_VERSION,
-        execution_model_version="quant-execution-v0.2.0:TradeBBOModel+ExactAccountLedger",
+        execution_model_version="quant-execution-v0.3.0:TradeBBOModel+ExactAccountLedger",
         base_currency=run.snapshot.base_currency,
         lineage=lineage,
         capabilities=[
@@ -481,8 +481,14 @@ def write_certified_standard_run(
             "spot-perpetual-basis",
             "funding",
             "backtest-ledger",
+            "l2-btc-spot-fixture-certified",
+            "l2-not-certified-for-eth-or-perpetual",
         ],
-        tags={"source": source, "environment": "offline-fixture"},
+        tags={
+            "source": source,
+            "environment": "offline-fixture",
+            "l2_scope": "BTC spot fixture-certified only",
+        },
         created_at=created_text,
     )
     loaded = load_and_validate_standard_run(Path(run_dir))

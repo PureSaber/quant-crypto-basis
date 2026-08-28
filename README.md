@@ -5,10 +5,10 @@ research、backtest和paper-simulation；没有联网采集、live broker、API 
 
 ## 认证边界
 
-- 数据：只读取仓内脱敏Binance/OKX fixture，通过`quant-data-kit v0.5.0`的标准
+- 数据：只读取仓内脱敏Binance/OKX fixture，通过`quant-data-kit v0.6.0`的标准
   `InstrumentSpec`、`SymbolMapping`、provider adapter和`MarketEvent`契约。
 - 信号：`BasisFundingStrategy.on_event`是唯一产生`OrderIntent`的位置；策略不修改持仓、现金或NAV。
-- 执行：只使用`quant-execution v0.2.0`的`DeterministicRunEngine`、
+- 执行：只使用`quant-execution v0.3.0`的`DeterministicRunEngine`、
   `RuleBookRiskGate`、匹配模型和`ExactAccountLedger`。
 - 审计：按每个`available_at`阶段从同一个执行引擎与账本实例取得`AccountSnapshot`，逐时点保留
   event id、mark、funding、fee、fill、持仓、保证金和NAV变化；不维护第二套状态。
@@ -17,10 +17,12 @@ research、backtest和paper-simulation；没有联网采集、live broker、API 
 
 Fixture适用期明确限定为`2026-01-02T00:00:00Z`至`2026-01-03T00:00:00Z`，不代表交易所
 上市历史。Binance与OKX仅做适配完整性、稳定instrument映射和交叉质量核验，不假定逐笔价格相等。
+L2范围严格限于fixture中的BTC现货盘口回放；ETH现货及所有永续只认证相应的非L2事件，不能
+据此宣称全标的L2认证。
 
 ## 安装与运行
 
-依赖在`pyproject.toml`中固定到GitHub release tag：QDK v0.5.0、QExec v0.2.0、QLab v0.3.0。
+依赖在`pyproject.toml`中固定到GitHub release tag：QDK v0.6.0、QExec v0.3.0、QLab v0.3.0。
 
 ```bash
 python -m pip install -e ".[dev]"
