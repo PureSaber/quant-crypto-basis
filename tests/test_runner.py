@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import timedelta
 from decimal import Decimal
 
 import pytest
-from quant_data_kit import FixedPoint, MarkPriceEvent
+from quant_data_kit import FixedPoint, MarkPriceEvent, market_event_payload
 from quant_data_kit.exceptions import ValidationError
 from quant_execution import ExactAccountLedger, Fill, LedgerEventType, Side
 
@@ -51,6 +53,14 @@ def test_identical_input_is_deterministic_across_three_complete_replays() -> Non
             run.result.event_sha256,
             run.result.fill_sha256,
             run.result.ledger_sha256,
+            hashlib.sha256(
+                json.dumps(
+                    [market_event_payload(event) for event in run.artifacts.market_events],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                ).encode()
+            ).hexdigest(),
             run.snapshot.nav,
             run.artifacts.ledger_transactions,
         )
@@ -121,6 +131,7 @@ def test_margin_rejection_and_liquidation_boundary_come_from_qexec() -> None:
             source="binance",
             trading_day=crash_time.date(),
             session_id=f"binance-24x7-{BTC_PERP}",
+            sequence=1,
             price=FixedPoint.from_decimal("1", 2),
         )
     )

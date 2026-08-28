@@ -59,3 +59,47 @@ def test_decoder_rejects_incomplete_book_level_and_invalid_enum() -> None:
     trade["aggressor_side"] = "invalid"
     with pytest.raises(ValidationError, match="invalid normalized"):
         market_event_from_payload(trade)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("event_time", 1, "event_time must be an ISO-8601 string"),
+        ("event_time", "not-a-time", "event_time must be an ISO-8601 string"),
+        ("price", {"units": True, "scale": 2}, "price.units"),
+        ("price", {"units": 1, "scale": False}, "price.scale"),
+    ],
+)
+def test_decoder_rejects_invalid_temporal_and_fixed_point_fields(
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    record = dict(
+        next(
+            item
+            for item in FixtureLoader().load("binance").records
+            if item["event_type"] == "trade"
+        )
+    )
+    record[field] = value
+    with pytest.raises(ValidationError, match=message):
+        market_event_from_payload(record)
+
+
+def test_decoder_rejects_invalid_base_identity_and_book_level_shape() -> None:
+    record = dict(FixtureLoader().load("binance").records[0])
+    del record["trading_day"]
+    with pytest.raises(ValidationError, match="identity"):
+        market_event_from_payload(record)
+
+    book = dict(
+        next(
+            item
+            for item in FixtureLoader().load("binance").records
+            if item["event_type"] == "book_snapshot"
+        )
+    )
+    book["bids"][0] = []
+    with pytest.raises(ValidationError, match="book level"):
+        market_event_from_payload(book)

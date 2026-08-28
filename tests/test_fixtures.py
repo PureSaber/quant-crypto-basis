@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import defaultdict
 from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
@@ -15,6 +16,7 @@ from quant_data_kit import (
     MarkPriceEvent,
     QuoteEvent,
     TradeEvent,
+    validate_event_stream,
 )
 from quant_data_kit.exceptions import ValidationError
 
@@ -64,6 +66,38 @@ def test_fixture_hashes_scope_24x7_and_applicability_are_exact() -> None:
         assert hashlib.sha256((root / relative).read_bytes()).hexdigest() == batch.file_sha256
         assert all(event.session_id.startswith(f"{provider}-24x7-") for event in batch.events)
         assert all(event.trading_day == event.event_time.date() for event in batch.events)
+
+
+@pytest.mark.parametrize("provider", ["binance", "okx"])
+def test_every_normalized_channel_has_non_null_strictly_increasing_sequences(
+    provider: str,
+) -> None:
+    batch = FixtureLoader().load(provider)
+    channels: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for event in batch.events:
+        assert isinstance(event.sequence, int)
+        channels[(event.instrument_id, event.event_type)].append(event.sequence)
+    assert all(values == sorted(values) for values in channels.values())
+    assert all(len(values) == len(set(values)) for values in channels.values())
+
+
+@pytest.mark.parametrize("mutation", ["duplicate", "out_of_order"])
+def test_normalized_duplicate_and_out_of_order_sequences_are_isolated(
+    mutation: str,
+) -> None:
+    records = [dict(record) for record in FixtureLoader().load("binance").records]
+    trade_indices = [
+        index
+        for index, record in enumerate(records)
+        if record["event_type"] == "trade" and record["instrument_id"] == "CRYPTO:BTC-USDT:SPOT"
+    ]
+    assert len(trade_indices) == 2
+    first, second = trade_indices
+    records[second]["sequence"] = (
+        records[first]["sequence"] if mutation == "duplicate" else records[first]["sequence"] - 1
+    )
+    with pytest.raises(ValidationError, match="Sequence must be strictly increasing"):
+        validate_event_stream(records)
 
 
 def test_fixture_loader_rejects_unknown_source_and_future_available_data() -> None:
