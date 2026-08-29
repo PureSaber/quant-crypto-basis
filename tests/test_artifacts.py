@@ -7,14 +7,18 @@ from types import MappingProxyType
 
 import pandas as pd
 import pytest
+from quant_data_kit import FixedPoint
 from quant_data_kit.exceptions import ValidationError
 from quant_lab import load_and_validate_standard_run
 from quant_lab.contracts_v2 import BACKTEST_LEDGER_PROFILE, PROFILE_ARTIFACTS_V2
 
+import quant_crypto_basis.artifacts as artifacts
 from quant_crypto_basis.artifacts import (
     CATALOG_DATASET,
     FIXTURE_DATASETS,
     INTERNAL_DEPENDENCIES,
+    _metadata_decimal,
+    _snapshot_position_rows,
     build_standard_frames,
     write_certified_standard_run,
 )
@@ -181,3 +185,73 @@ def test_standard_writer_rejects_incomplete_or_mismatched_cross_source_provenanc
     )
     with pytest.raises(ValidationError, match="selected fixture hash differs"):
         write_certified_standard_run(mismatched, tmp_path / "mismatched", code_version=head)
+
+
+def test_standard_frame_boundaries_fail_closed_for_currency_zero_position_and_settlement() -> None:
+    run = run_fixture_backtest(source="binance", run_id="boundary-guards")
+    with pytest.raises(ValidationError, match="requires USDT base currency"):
+        build_standard_frames(replace(run, snapshot=replace(run.snapshot, base_currency="BTC")))
+
+    zero = replace(
+        run.snapshot,
+        positions={"CRYPTO:BTC-USDT:SPOT": FixedPoint.from_decimal("0", 3)},
+    )
+    assert _snapshot_position_rows(zero.event_time, zero, run.instruments) == []
+
+    instrument_id = "CRYPTO:BTC-USDT:SPOT"
+    incompatible = replace(run.instruments[instrument_id], settlement_currency="BTC")
+    with pytest.raises(ValidationError, match="unversioned FX rate"):
+        _snapshot_position_rows(
+            run.snapshot.event_time,
+            run.snapshot,
+            {**run.instruments, instrument_id: incompatible},
+        )
+
+
+def test_standard_margin_and_metadata_guards_preserve_qexec_reconciliation() -> None:
+    run = run_fixture_backtest(source="okx", run_id="reconciliation-guards")
+    bad_initial = replace(
+        run.event_trace[-1],
+        snapshot=replace(
+            run.event_trace[-1].snapshot,
+            initial_margin=FixedPoint.from_decimal(
+                run.event_trace[-1].snapshot.initial_margin.to_decimal() + 1, 8
+            ),
+        ),
+    )
+    with pytest.raises(ValidationError, match="initial margin differs"):
+        build_standard_frames(replace(run, event_trace=(*run.event_trace[:-1], bad_initial)))
+
+    bad_maintenance = replace(
+        run.event_trace[-1],
+        snapshot=replace(
+            run.event_trace[-1].snapshot,
+            maintenance_margin=FixedPoint.from_decimal(
+                run.event_trace[-1].snapshot.maintenance_margin.to_decimal() + 1, 8
+            ),
+        ),
+    )
+    with pytest.raises(ValidationError, match="maintenance margin differs"):
+        build_standard_frames(replace(run, event_trace=(*run.event_trace[:-1], bad_maintenance)))
+
+    spec = run.instruments["CRYPTO:BTC-USDT:PERP"]
+    with pytest.raises(ValidationError, match="initial_margin_rate.*required"):
+        _metadata_decimal(replace(spec, metadata={}), "initial_margin_rate")
+    with pytest.raises(ValidationError, match="must be finite"):
+        _metadata_decimal(
+            replace(spec, metadata={**spec.metadata, "initial_margin_rate": "NaN"}),
+            "initial_margin_rate",
+        )
+
+
+def test_standard_writer_rejects_readback_mismatch(
+    tmp_path: Path,
+    clean_git_repo: tuple[Path, str],
+    monkeypatch,
+) -> None:
+    repository, head = clean_git_repo
+    monkeypatch.chdir(repository)
+    run = run_fixture_backtest(source="binance", run_id="bad-readback")
+    monkeypatch.setattr(artifacts, "load_and_validate_standard_run", lambda _: object())
+    with pytest.raises(ValidationError, match="readback differs"):
+        write_certified_standard_run(run, tmp_path / "bad-readback", code_version=head)
