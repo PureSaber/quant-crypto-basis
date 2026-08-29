@@ -20,7 +20,7 @@ from quant_crypto_basis.provenance import resolve_clean_head
 from quant_crypto_basis.runner import CertifiedBacktest, EventStageSnapshot, run_fixture_backtest
 from quant_crypto_basis.strategy import BasisFundingConfig, BasisFundingStrategy
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "BTC_PERP",

@@ -3,8 +3,11 @@
 .pytest-tmp/
 .ruff_cache/
 .venv/
+.venv*/
 __pycache__/
 coverage.xml
+coverage-*.json
+.pytest-tmp*/
 *.egg-info/
 build/
 dist/

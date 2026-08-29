@@ -20,9 +20,9 @@ from quant_crypto_basis.provenance import resolve_clean_head
 from quant_crypto_basis.runner import ACCOUNT_ID, STRATEGY_ID, CertifiedBacktest
 
 INTERNAL_DEPENDENCIES = {
-    "quant-data-kit": "v0.6.0",
-    "quant-execution": "v0.3.0",
-    "quant-lab": "v0.3.0",
+    "quant-data-kit": "v0.6.1",
+    "quant-execution": "v0.4.1",
+    "quant-lab": "v0.3.1",
 }
 CATALOG_DATASET = "crypto-fixture-catalog-index"
 FIXTURE_DATASETS = {
@@ -473,7 +473,7 @@ def write_certified_standard_run(
         random_seed=run.result.seed,
         dataset_snapshots=dataset_snapshots,
         instrument_master_version=INSTRUMENT_MASTER_VERSION,
-        execution_model_version="quant-execution-v0.3.0:TradeBBOModel+ExactAccountLedger",
+        execution_model_version="quant-execution-v0.4.1:TradeBBOModel+ExactAccountLedger",
         base_currency=run.snapshot.base_currency,
         lineage=lineage,
         capabilities=[
