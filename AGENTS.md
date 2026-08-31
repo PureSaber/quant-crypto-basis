@@ -15,9 +15,9 @@
 
 ## Frozen dependencies
 
-- `quant-data-kit==v0.5.0` (`84884f5005cbb9c0111564732d96509a63f34d79`)
-- `quant-execution==v0.2.0` (`9529d95a7c19ff3e605a8377d54af75a4260a49e`)
-- `quant-lab==v0.3.0` (`ae0e9edea5cef136f9888d734030da1922b07283`)
+- `quant-data-kit==v0.8.1` (`8f258f11be8e4d8edddcd41b79b817bd6c925970`)
+- `quant-execution==v0.5.1` (`15e4e5c9dbaf2fe9b438732b2e94db295d5ea58c`)
+- `quant-lab==v0.3.1` (`27489d270e132adbec1bced93eb2ae84ad5e1a9b`)
 
 Do not replace these with floating branches or adjacent working-tree dependencies for release
 evidence.
