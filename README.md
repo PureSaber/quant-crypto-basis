@@ -1,6 +1,6 @@
 # quant-crypto-basis
 
-本版本`0.1.1`完成M6策略层依赖治理。认证路径继续只消费离线fixture，不改变基差策略、
+本版本`0.1.2`完成M8运行时发布列车升级。认证路径继续只消费离线fixture，不改变基差策略、
 统一QExec执行/账本或历史`standard/v1`语义；费用、滑点、funding、保证金、强平和NAV不由
 策略自行计算或修改。
 
@@ -9,10 +9,10 @@ research、backtest和paper-simulation；没有联网采集、live broker、API 
 
 ## 认证边界
 
-- 数据：只读取仓内脱敏Binance/OKX fixture，通过`quant-data-kit v0.6.1`的标准
+- 数据：只读取仓内脱敏Binance/OKX fixture，通过`quant-data-kit v0.8.1`的标准
   `InstrumentSpec`、`SymbolMapping`、provider adapter和`MarketEvent`契约。
 - 信号：`BasisFundingStrategy.on_event`是唯一产生`OrderIntent`的位置；策略不修改持仓、现金或NAV。
-- 执行：只使用`quant-execution v0.4.1`的`DeterministicRunEngine`、
+- 执行：只使用`quant-execution v0.5.1`的`DeterministicRunEngine`、
   `RuleBookRiskGate`、匹配模型和`ExactAccountLedger`。
 - 审计：按每个`available_at`阶段从同一个执行引擎与账本实例取得`AccountSnapshot`，逐时点保留
   event id、mark、funding、fee、fill、持仓、保证金和NAV变化；不维护第二套状态。
@@ -26,9 +26,9 @@ L2范围严格限于fixture中的BTC现货盘口回放；ETH现货及所有永�
 
 ## 安装与运行
 
-依赖在`pyproject.toml`和`requirements.lock`中固定到已发布annotatedtag：QDK`v0.6.1`
-（peeledcommit`edf1351690dc60691cc6330390adcdbf8bc79c5f`）、QExec`v0.4.1`
-（`29eccc0e392968b5f7c31976a329605aacce369a`）和QLab`v0.3.1`
+依赖在`pyproject.toml`和`requirements.lock`中固定到已发布annotatedtag：QDK`v0.8.1`
+（peeledcommit`8f258f11be8e4d8edddcd41b79b817bd6c925970`）、QExec`v0.5.1`
+（`15e4e5c9dbaf2fe9b438732b2e94db295d5ea58c`）和QLab`v0.3.1`
 （`27489d270e132adbec1bced93eb2ae84ad5e1a9b`）。
 
 ```bash
