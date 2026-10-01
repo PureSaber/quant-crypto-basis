@@ -62,6 +62,9 @@ def test_strategy_emits_only_paired_order_intents_from_on_event() -> None:
     assert all(intent.order_type is OrderType.LIMIT for intent in intents)
     assert all(intent.created_at == T0 + timedelta(seconds=3, milliseconds=1) for intent in intents)
     assert not any(intent.reduce_only for intent in intents)
+    assert strategy.target_exposure_open
+    assert strategy.pair_audit[0].event_id == "funding"
+    assert not hasattr(strategy, "_regime_open")
     assert not hasattr(strategy, "positions")
     assert not hasattr(strategy, "cash")
     assert not hasattr(strategy, "nav")
@@ -79,6 +82,8 @@ def test_strategy_exit_is_pairwise_and_only_perpetual_is_reduce_only() -> None:
         (BTC_SPOT, Side.SELL, False),
         (BTC_PERP, Side.BUY, True),
     ]
+    assert not strategy.target_exposure_open
+    assert [item.action for item in strategy.pair_audit] == ["open", "close"]
     assert strategy.on_event(context, _funding("no-reopen", 6, rate=0.0)) == ()
     strategy.reset()
     assert strategy.on_event(context, _funding("missing-prices", 7)) == ()

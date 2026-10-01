@@ -15,6 +15,7 @@ from quant_execution import (
     DeterministicBroker,
     DeterministicRunEngine,
     ExactAccountLedger,
+    OrderStatus,
     RuleBookRiskGate,
     RunArtifacts,
     RunResult,
@@ -62,6 +63,55 @@ class CertifiedBacktest:
     strategy_config: BasisFundingConfig
     initial_cash: FixedPoint
     event_trace: tuple[EventStageSnapshot, ...]
+
+
+def _assert_complete_pair_executions(
+    strategy: BasisFundingStrategy,
+    artifacts: RunArtifacts,
+) -> None:
+    orders_by_key = {order.intent.idempotency_key: order for order in artifacts.orders}
+    if len(orders_by_key) != len(artifacts.orders):
+        raise ValidationError("basis replay produced duplicate order idempotency keys")
+    audited_keys = {
+        key
+        for pair in strategy.pair_audit
+        for key in (pair.spot_idempotency_key, pair.perpetual_idempotency_key)
+    }
+    unexpected_keys = set(orders_by_key) - audited_keys
+    if unexpected_keys:
+        raise ValidationError(
+            f"basis replay produced orders without pair audit: {sorted(unexpected_keys)}"
+        )
+    latest_reasons = {
+        event.order_id: event.reason for event in artifacts.order_events if event.reason
+    }
+    for pair in strategy.pair_audit:
+        outcomes: list[str] = []
+        complete = True
+        for leg_role, key in (
+            ("spot", pair.spot_idempotency_key),
+            ("perpetual", pair.perpetual_idempotency_key),
+        ):
+            order = orders_by_key.get(key)
+            if order is None:
+                complete = False
+                outcomes.append(f"{leg_role}=missing")
+                continue
+            leg_complete = (
+                order.status is OrderStatus.FILLED and order.filled_quantity == pair.quantity
+            )
+            complete = complete and leg_complete
+            reason = latest_reasons.get(order.order_id, "")
+            detail = (
+                f"{leg_role}={order.status.value}:"
+                f"{order.filled_quantity.to_decimal()}/{pair.quantity.to_decimal()}"
+            )
+            outcomes.append(f"{detail}:{reason}" if reason else detail)
+        if not complete:
+            raise ValidationError(
+                "basis pair execution incomplete; "
+                f"event_id={pair.event_id}; action={pair.action}; " + "; ".join(outcomes)
+            )
 
 
 def run_fixture_backtest(
@@ -156,6 +206,7 @@ def run_fixture_backtest(
         prior_end = stage_end
     if result is None or engine.artifacts is None:
         raise ValidationError("fixture replay requires at least one event stage")
+    _assert_complete_pair_executions(strategy, engine.artifacts)
     snapshot = ledger.snapshot()
     ledger.assert_nav_residual(snapshot)
     if snapshot != event_trace[-1].snapshot:
