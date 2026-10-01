@@ -56,6 +56,17 @@ class BasisFundingConfig:
             raise ValidationError("passive_limits must be boolean")
 
 
+@dataclass(frozen=True, slots=True)
+class PairIntentAudit:
+    """One desired two-leg transition, before QExec decides either leg's outcome."""
+
+    event_id: str
+    action: str
+    spot_idempotency_key: str
+    perpetual_idempotency_key: str
+    quantity: FixedPoint
+
+
 class BasisFundingStrategy:
     """Signal state only; QExec remains the sole owner of positions, cash and NAV."""
 
@@ -67,7 +78,17 @@ class BasisFundingStrategy:
 
     def reset(self) -> None:
         self._prices: dict[str, FixedPoint] = {}
-        self._regime_open = False
+        self._target_exposure_open = False
+        self._pair_audit: list[PairIntentAudit] = []
+
+    @property
+    def target_exposure_open(self) -> bool:
+        """Whether the signal plan targets an open pair; this is not an execution fact."""
+        return self._target_exposure_open
+
+    @property
+    def pair_audit(self) -> tuple[PairIntentAudit, ...]:
+        return tuple(self._pair_audit)
 
     def on_event(self, context: StrategyContext, event: MarketEvent) -> tuple[OrderIntent, ...]:
         price = self._event_price(event)
@@ -86,18 +107,22 @@ class BasisFundingStrategy:
             return ()
         basis_bps = (_decimal(perpetual) / _decimal(spot) - Decimal(1)) * Decimal(10_000)
         funding_rate = Decimal(str(event.rate))
-        if not self._regime_open:
+        if not self._target_exposure_open:
             if (
                 basis_bps < self.config.entry_basis_bps
                 or funding_rate < self.config.minimum_funding_rate
             ):
                 return ()
-            self._regime_open = True
-            return self._pair_intents(context, event, closing=False, spot=spot, perpetual=perpetual)
+            intents = self._pair_intents(
+                context, event, closing=False, spot=spot, perpetual=perpetual
+            )
+            self._target_exposure_open = True
+            return intents
         if basis_bps > self.config.exit_basis_bps:
             return ()
-        self._regime_open = False
-        return self._pair_intents(context, event, closing=True, spot=spot, perpetual=perpetual)
+        intents = self._pair_intents(context, event, closing=True, spot=spot, perpetual=perpetual)
+        self._target_exposure_open = False
+        return intents
 
     def _pair_intents(
         self,
@@ -120,7 +145,7 @@ class BasisFundingStrategy:
         }
         spot_side = Side.SELL if closing else Side.BUY
         perpetual_side = Side.BUY if closing else Side.SELL
-        return (
+        intents = (
             OrderIntent(
                 idempotency_key=f"{context.run_id}:{event.event_id}:{action}:spot",
                 instrument_id=self.config.spot_instrument_id,
@@ -138,6 +163,16 @@ class BasisFundingStrategy:
                 **shared,
             ),
         )
+        self._pair_audit.append(
+            PairIntentAudit(
+                event_id=event.event_id,
+                action=action,
+                spot_idempotency_key=intents[0].idempotency_key,
+                perpetual_idempotency_key=intents[1].idempotency_key,
+                quantity=self.config.quantity,
+            )
+        )
+        return intents
 
     @staticmethod
     def _event_price(event: MarketEvent) -> FixedPoint | None:
