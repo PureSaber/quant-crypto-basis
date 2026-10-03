@@ -24,6 +24,25 @@ Fixture适用期明确限定为`2026-01-02T00:00:00Z`至`2026-01-03T00:00:00Z`�
 L2范围严格限于fixture中的BTC现货盘口回放；ETH现货及所有永续只认证相应的非L2事件，不能
 据此宣称全标的L2认证。
 
+## 原生只读预检
+
+```bash
+qcb-run-fixture --source binance --seed 7 --preflight
+qcb-run-fixture --source binance --seed 7 --output output/binance
+qcb-run-fixture --source okx --taker --preflight
+```
+
+`--preflight`返回`quant-crypto-basis.preflight/v1`JSON，不接受`--output`或`--code-version`，
+不要求创建运行目录或先取得可发布源码身份。正式运行仍执行既有clean-HEAD检查。
+预检与回放共用静态输入路径：验证种子、现金、策略双腿身份，以及目录清单、文件哈希和两个来源的质量。
+即使选择Binance，也必须验证OKX样例。回执保留实际配置、配置摘要、输入文件SHA-256与修改时间，
+并明确`evidence_kind=synthetic`、`investable=false`和USDT币种。
+
+预检不创建策略、撮合器、引擎或账户，不检查策略是否盈利，也不保证双腿成交、保证金或流动性足够。
+正式回放重新验证相同参数和已有输入；加载或回放期间输入内容、修改时间或文件集合发生变化即失败。
+预检成功不锁定未来输入，不验证输出目录可写，不扩展真实市场或L2认证范围。
+完整Studio模板及结果展示将另行验收。
+
 ## 安装与运行
 
 依赖在`pyproject.toml`和`requirements.lock`中固定到已发布annotatedtag：QDK`v0.8.1`
