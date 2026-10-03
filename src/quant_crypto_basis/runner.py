@@ -35,6 +35,7 @@ from quant_crypto_basis.strategy import BasisFundingConfig, BasisFundingStrategy
 
 ACCOUNT_ID = "crypto-research-account"
 STRATEGY_ID = "spot-perpetual-basis-funding-v1"
+DEFAULT_INITIAL_CASH = Decimal("100000")
 
 
 def _input_state(root: Path) -> dict[str, tuple[str, int]]:
@@ -69,7 +70,7 @@ def prepare_fixture_inputs(
     run_id: str = "crypto-basis-fixture-v1",
     seed: int = 7,
     strategy_config: BasisFundingConfig | None = None,
-    initial_cash: Decimal | str = Decimal("100000"),
+    initial_cash: Decimal | str = DEFAULT_INITIAL_CASH,
     fixture_loader: FixtureLoader | None = None,
 ) -> PreparedFixtureInputs:
     """Shared static validation; no signal, matching or account state is created."""
@@ -207,7 +208,7 @@ def run_fixture_backtest(
     run_id: str = "crypto-basis-fixture-v1",
     seed: int = 7,
     strategy_config: BasisFundingConfig | None = None,
-    initial_cash: Decimal | str = Decimal("100000"),
+    initial_cash: Decimal | str = DEFAULT_INITIAL_CASH,
     fixture_loader: FixtureLoader | None = None,
 ) -> CertifiedBacktest:
     """Run one deterministic fixture replay through the frozen QExec fact path."""

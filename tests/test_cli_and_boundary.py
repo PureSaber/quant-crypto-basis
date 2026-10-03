@@ -81,3 +81,31 @@ def test_source_tree_has_no_network_live_broker_or_credential_path() -> None:
     assert "secret_key" not in production
     assert "send_order" not in production
     assert "place_order" not in production
+
+
+@pytest.mark.parametrize("liquidity", ["maker", "taker"])
+def test_nondefault_opening_cash_is_preserved_from_preflight_to_artifacts(
+    liquidity,
+    tmp_path,
+    capsys,
+    monkeypatch,
+    clean_git_repo,
+):
+    repository, _ = clean_git_repo
+    monkeypatch.chdir(repository)
+    common = ["--source", "okx", "--initial-cash", "250000.12345678", "--liquidity", liquidity]
+    assert main([*common, "--preflight"]) == 0
+    checked = json.loads(capsys.readouterr().out)
+    output = tmp_path / "run"
+    assert main([*common, "--output", str(output)]) == 0
+    capsys.readouterr()
+    load_and_validate_standard_run(output)
+    config = json.loads((output / "standard/v2/config.json").read_text(encoding="utf-8"))
+    assert config["initial_cash"] == checked["config"]["initial_cash"] == "250000.12345678"
+    assert config["base_currency"] == checked["base_currency"] == "USDT"
+    assert config["passive_limits"] == (liquidity == "maker")
+
+
+def test_liquidity_flags_are_mutually_exclusive():
+    with pytest.raises(SystemExit):
+        main(["--preflight", "--taker", "--liquidity", "maker"])

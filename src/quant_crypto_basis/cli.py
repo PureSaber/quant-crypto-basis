@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from quant_crypto_basis.artifacts import write_certified_standard_run
-from quant_crypto_basis.runner import run_fixture_backtest
+from quant_crypto_basis.runner import DEFAULT_INITIAL_CASH, run_fixture_backtest
 from quant_crypto_basis.strategy import BasisFundingConfig
 
 
@@ -25,7 +25,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--run-id", default="crypto-basis-fixture-v1")
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument(
+    parser.add_argument("--initial-cash", default=str(DEFAULT_INITIAL_CASH))
+    liquidity = parser.add_mutually_exclusive_group()
+    liquidity.add_argument("--liquidity", choices=("maker", "taker"))
+    liquidity.add_argument(
         "--taker",
         action="store_true",
         help="Use simulated market orders; default uses passive limits for maker fills",
@@ -36,7 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    config = BasisFundingConfig(passive_limits=not args.taker)
+    config = BasisFundingConfig(passive_limits=not args.taker and args.liquidity != "taker")
     if args.preflight:
         if args.output is not None or args.code_version is not None:
             parser.error("--preflight does not accept --output or --code-version")
@@ -49,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
                     run_id=args.run_id,
                     seed=args.seed,
                     strategy_config=config,
+                    initial_cash=args.initial_cash,
                 ),
                 sort_keys=True,
             )
@@ -61,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         run_id=args.run_id,
         seed=args.seed,
         strategy_config=config,
+        initial_cash=args.initial_cash,
     )
     manifest = write_certified_standard_run(
         run,
