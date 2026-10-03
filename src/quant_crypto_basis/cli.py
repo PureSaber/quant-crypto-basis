@@ -17,7 +17,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Run an offline research fixture through QExec and QLab standard/v2",
     )
     parser.add_argument("--source", choices=("binance", "okx"), default="binance")
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--preflight", action="store_true", help="Read-only fixture/config check")
     parser.add_argument(
         "--code-version",
         help="Optional expected full commit; always verified against the current clean HEAD",
@@ -33,8 +34,28 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     config = BasisFundingConfig(passive_limits=not args.taker)
+    if args.preflight:
+        if args.output is not None or args.code_version is not None:
+            parser.error("--preflight does not accept --output or --code-version")
+        from quant_crypto_basis.preflight import preflight
+
+        print(
+            json.dumps(
+                preflight(
+                    source=args.source,
+                    run_id=args.run_id,
+                    seed=args.seed,
+                    strategy_config=config,
+                ),
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.output is None:
+        parser.error("--output is required unless --preflight is selected")
     run = run_fixture_backtest(
         source=args.source,
         run_id=args.run_id,

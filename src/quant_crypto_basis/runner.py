@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from types import MappingProxyType
 
 from quant_data_kit import FixedPoint, InstrumentSpec
@@ -33,6 +35,91 @@ from quant_crypto_basis.strategy import BasisFundingConfig, BasisFundingStrategy
 
 ACCOUNT_ID = "crypto-research-account"
 STRATEGY_ID = "spot-perpetual-basis-funding-v1"
+
+
+def _input_state(root: Path) -> dict[str, tuple[str, int]]:
+    root = root.resolve(strict=True)
+    result = {}
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        before = path.stat()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        after = path.stat()
+        if (before.st_mtime_ns, before.st_size) != (after.st_mtime_ns, after.st_size):
+            raise ValidationError("fixture input changed while reading")
+        result[path.relative_to(root).as_posix()] = (digest, after.st_mtime_ns)
+    return result
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedFixtureInputs:
+    batch: FixtureBatch
+    quality_report: CrossSourceQualityReport
+    instruments: Mapping[str, InstrumentSpec]
+    strategy_config: BasisFundingConfig
+    initial_cash: FixedPoint
+    fixture_root: Path
+    input_state: dict[str, tuple[str, int]]
+
+
+def prepare_fixture_inputs(
+    *,
+    source: str = "binance",
+    run_id: str = "crypto-basis-fixture-v1",
+    seed: int = 7,
+    strategy_config: BasisFundingConfig | None = None,
+    initial_cash: Decimal | str = Decimal("100000"),
+    fixture_loader: FixtureLoader | None = None,
+) -> PreparedFixtureInputs:
+    """Shared static validation; no signal, matching or account state is created."""
+    if source not in {"binance", "okx"}:
+        raise ValidationError(f"unsupported fixture source: {source!r}")
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValidationError("run_id is required")
+    if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
+        raise ValidationError("seed must be a non-negative integer")
+    try:
+        amount = Decimal(str(initial_cash))
+    except InvalidOperation as exc:
+        raise ValidationError("initial_cash must be finite and positive") from exc
+    if not amount.is_finite() or amount <= 0:
+        raise ValidationError("initial_cash must be finite and positive")
+    cash = FixedPoint.from_decimal(amount, 8)
+    if not cash.is_positive():
+        raise ValidationError("initial_cash must be positive at money_scale")
+    config = strategy_config if strategy_config is not None else BasisFundingConfig()
+    if not isinstance(config, BasisFundingConfig):
+        raise ValidationError("strategy_config must be a BasisFundingConfig")
+    loader = fixture_loader or FixtureLoader()
+    before = _input_state(loader.root)
+    batches, quality = load_certified_fixtures(loader)
+    batch = batches[source]
+    instruments = dict(loader.instrument_master.instruments)
+    legs = {config.spot_instrument_id, config.perpetual_instrument_id}
+    if not legs <= instruments.keys() or not legs <= batch.instrument_ids:
+        raise ValidationError("strategy legs must be present in the fixture master and events")
+    spot = instruments[config.spot_instrument_id]
+    perpetual = instruments[config.perpetual_instrument_id]
+    if (
+        spot.product_type != "spot"
+        or perpetual.product_type != "linear_perpetual"
+        or perpetual.underlying_id != spot.instrument_id
+        or spot.settlement_currency != "USDT"
+        or perpetual.settlement_currency != "USDT"
+    ):
+        raise ValidationError("strategy requires matched USDT spot and linear perpetual legs")
+    if _input_state(loader.root) != before:
+        raise ValidationError("fixture inputs changed during validation")
+    return PreparedFixtureInputs(
+        batch,
+        quality,
+        MappingProxyType(instruments),
+        config,
+        cash,
+        loader.root,
+        before,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,19 +211,19 @@ def run_fixture_backtest(
     fixture_loader: FixtureLoader | None = None,
 ) -> CertifiedBacktest:
     """Run one deterministic fixture replay through the frozen QExec fact path."""
-    if source not in {"binance", "okx"}:
-        raise ValidationError(f"unsupported fixture source: {source!r}")
-    if not run_id.strip():
-        raise ValidationError("run_id is required")
-    master = (fixture_loader or FixtureLoader()).instrument_master
-    loader = fixture_loader or FixtureLoader(instrument_master=master)
-    batches, quality = load_certified_fixtures(loader)
-    batch = batches[source]
-    instruments = dict(master.instruments)
-    cash = FixedPoint.from_decimal(initial_cash, 8)
-    if not cash.is_positive():
-        raise ValidationError("initial_cash must be positive")
-    config = strategy_config or BasisFundingConfig()
+    prepared = prepare_fixture_inputs(
+        source=source,
+        run_id=run_id,
+        seed=seed,
+        strategy_config=strategy_config,
+        initial_cash=initial_cash,
+        fixture_loader=fixture_loader,
+    )
+    batch = prepared.batch
+    quality = prepared.quality_report
+    instruments = dict(prepared.instruments)
+    cash = prepared.initial_cash
+    config = prepared.strategy_config
     strategy = BasisFundingStrategy(config)
     ledger = ExactAccountLedger(
         account_id=ACCOUNT_ID,
@@ -211,6 +298,8 @@ def run_fixture_backtest(
     ledger.assert_nav_residual(snapshot)
     if snapshot != event_trace[-1].snapshot:
         raise ValidationError("final event-stage snapshot differs from QExec ledger final snapshot")
+    if _input_state(prepared.fixture_root) != prepared.input_state:
+        raise ValidationError("fixture inputs changed during replay")
     return CertifiedBacktest(
         result=result,
         artifacts=engine.artifacts,
