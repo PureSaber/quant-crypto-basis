@@ -9,7 +9,7 @@ from typing import Any
 
 from quant_crypto_basis.catalog import INSTRUMENT_MASTER_VERSION
 from quant_crypto_basis.fixtures import FixtureLoader
-from quant_crypto_basis.runner import prepare_fixture_inputs
+from quant_crypto_basis.runner import DEFAULT_INITIAL_CASH, prepare_fixture_inputs
 from quant_crypto_basis.strategy import BasisFundingConfig
 
 
@@ -19,7 +19,7 @@ def preflight(
     run_id: str = "crypto-basis-fixture-v1",
     seed: int = 7,
     strategy_config: BasisFundingConfig | None = None,
-    initial_cash: Decimal | str = Decimal("100000"),
+    initial_cash: Decimal | str = DEFAULT_INITIAL_CASH,
     fixture_loader: FixtureLoader | None = None,
 ) -> dict[str, Any]:
     prepared = prepare_fixture_inputs(

@@ -26,6 +26,10 @@ L2范围严格限于fixture中的BTC现货盘口回放；ETH现货及所有永�
 
 ## 原生只读预检
 
+CLI可显式设置`--initial-cash`（USDT）及`--liquidity maker|taker`，预检和正式运行使用相同参数。
+旧`--taker`保留，与`--liquidity`互斥。初始资金和币种写入受哈希保护的standard/v2配置，
+下游按实际初始本金计算收益，不从首个事件净值猜测或使用固定默认值。
+
 ```bash
 qcb-run-fixture --source binance --seed 7 --preflight
 qcb-run-fixture --source binance --seed 7 --output output/binance

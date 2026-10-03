@@ -442,6 +442,8 @@ def write_certified_standard_run(
     }
     config = {
         "source": source,
+        "initial_cash": str(_decimal(run.initial_cash)),
+        "base_currency": run.snapshot.base_currency,
         "seed": run.result.seed,
         "strategy_id": STRATEGY_ID,
         "spot_instrument_id": run.strategy_config.spot_instrument_id,
